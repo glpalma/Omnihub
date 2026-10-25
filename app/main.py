@@ -7,7 +7,14 @@ from app.api.health import router as health_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # DB tables and ARQ pool are initialised in later steps
+    # Create all tables if they don't exist yet.
+    # ponytail: using create_all instead of Alembic migrations — upgrade path is Alembic (Level 2)
+    from app.db.models import Base
+    from app.db.session import engine
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
     yield
 
 
