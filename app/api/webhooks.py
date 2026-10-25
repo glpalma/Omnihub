@@ -7,7 +7,7 @@ Only the fields required for ingestion are modelled; unknown fields are ignored.
 from typing import Any
 
 from fastapi import APIRouter, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.api.deps import DB
@@ -25,19 +25,12 @@ class WATextBody(BaseModel):
 
 class WAMessage(BaseModel):
     id: str          # wamid — the external_message_id used for deduplication
-    from_: str       # sender's phone number (field is "from" in JSON)
+    from_: str = Field(alias="from")  # "from" is a reserved keyword in Python
     timestamp: str
     type: str        # "text" | "image" | etc. — we only process "text" for now
     text: WATextBody | None = None
 
     model_config = {"populate_by_name": True}
-
-    # pydantic alias so "from" in JSON → from_ in Python
-    @classmethod
-    def model_validate(cls, obj: Any, **kwargs: Any) -> "WAMessage":
-        if isinstance(obj, dict) and "from" in obj:
-            obj = {**obj, "from_": obj.pop("from")}
-        return super().model_validate(obj, **kwargs)
 
 
 class WAValue(BaseModel):
