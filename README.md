@@ -1,8 +1,8 @@
 # Omnihub
 
-Backend de atendimento **omnichannel**: recebe mensagens de múltiplos canais (WhatsApp, webchat) via webhook, normaliza em um domínio único e expõe uma API REST para gerenciar tickets de suporte.
+Atendimento **omnichannel**: recebe mensagens de WhatsApp e webchat via webhook, normaliza em um domínio único, processa em fila e entrega para o atendente numa mesa (React) atualizada ao vivo por SSE, além da API REST.
 
-Projeto pessoal construído para demonstrar domínio de back-end Python assíncrono, integração via fila, e design de API documentada.
+Projeto pessoal construído para demonstrar domínio de back-end Python assíncrono, integração via fila, e uma interface de operação em cima da mesma API.
 
 ---
 
@@ -12,41 +12,63 @@ Plataformas de atendimento como as da VulcaNet recebem eventos de WhatsApp, voz,
 
 ---
 
+## Decisões de design
+
+| Decisão | Alternativa considerada | Por quê essa |
+|---|---|---|
+| **FastAPI** | Flask, Django | Async nativo; gera OpenAPI/Swagger automaticamente a partir de type hints |
+| **ARQ + Redis** como fila | Celery + RabbitMQ; fila em tabela Postgres | ARQ é async-nativo e leve; combina com o event loop do FastAPI; Redis é atomic para pop de fila |
+| **PostgreSQL + SQLAlchemy 2.0 async** | MongoDB; SQLite | SQL com relações claras (conversa → mensagens → ticket); SQLAlchemy 2.0 tem suporte nativo a async sem bloquear o event loop |
+| **`create_all` no startup** | Alembic migrations | MVP deliberado; Alembic é o upgrade path (Nível 2) — marcado no código com `ponytail:` comment |
+| **Resposta `202 Accepted` no webhook** | Processar de forma síncrona | A Meta reenvia o evento se não receber resposta rápida; processar de forma síncrona tornaria o endpoint sujeito a timeouts e duplicatas |
+| **Dedupe por `external_message_id`** (wamid no WhatsApp, `message_id` no webchat) | Apenas confiar na fila não reenviar | Webhooks reais reenviam; a defesa precisa estar no endpoint (antes de enfileirar) E no worker (na escrita) |
+| **SQLite in-memory nos testes** | testcontainers + Postgres real | Sem infraestrutura necessária para `pytest`; `Uuid` genérico do SQLAlchemy 2.0 é compatível com ambos |
+
+
+---
+
 ## Arquitetura
 
 ```
-                         ┌─────────────────────────────────────┐
-  WhatsApp Cloud API     │                                     │
-  (ou curl simulando) ──►│  POST /webhooks/whatsapp            │
-                         │  ① valida payload (Pydantic)        │
-                         │  ② dedupe por wamid (idempotência)  │
-                         │  ③ enfileira job no Redis           │
-                         │  ④ responde 202 imediatamente       │
-                         │                  │                  │
-                         │              Redis (fila)           │
-                         │                  │                  │
-                         │           [worker ARQ]              │
-                         │  ⑤ upsert Conversation              │
-                         │  ⑥ insere Message                   │
-                         │  ⑦ cria/reutiliza Ticket            │
-                         │                  │                  │
-  curl / Swagger ───────►│  GET /tickets   PostgreSQL          │
-                         │  GET /tickets/{id}                  │
-                         │  POST /tickets/{id}/transition      │
-                         └─────────────────────────────────────┘
+                         ┌──────────────────────────────────────────┐
+  WhatsApp / webchat     │                                          │
+  (ou a mesa simulando)─►│  POST /webhooks/whatsapp                 │
+                         │  POST /webhooks/webchat                  │
+                         │  ① valida payload (Pydantic)             │
+                         │  ② dedupe por external_message_id        │
+                         │  ③ enfileira job no Redis                │
+                         │  ④ publica evento e responde 202         │
+                         │                  │                       │
+                         │         Redis (fila ARQ + pub/sub)       │
+                         │                  │                       │
+                         │           [worker ARQ]                   │
+                         │  ⑤ upsert Conversation                   │
+                         │  ⑥ insere Message                        │
+                         │  ⑦ cria ou reutiliza Ticket              │
+                         │                  │                       │
+  Mesa :5173             │  GET /board          PostgreSQL          │
+  Quadro / curl /docs ──►│  GET /events  (SSE)                      │
+                         │  GET /tickets  ·  GET /tickets/{id}      │
+                         │  POST /tickets/{id}/transition           │
+                         │  POST /tickets/{id}/messages             │
+                         └──────────────────────────────────────────┘
 ```
+
+O worker publica no canal `omnihub:events`. `GET /events` assina esse canal com uma conexão Redis própria (o pool do ARQ fica livre para enfileirar) e encaminha os eventos ao navegador.
 
 ```
 app/
-  api/          rotas FastAPI (health, tickets, webhooks)
+  api/          rotas FastAPI (health, board, stream, tickets, webhooks)
   domain/       entidades puras + máquina de estados (sem DB)
   db/           modelos SQLAlchemy 2.0 async + sessão
-  workers/      task ARQ + WorkerSettings
+  workers/      tasks ARQ (WhatsApp e inbound genérico) + WorkerSettings
+  events.py     cartão do quadro e publicação no canal Redis
   core/         config (pydantic-settings)
+frontend/       mesa e quadro (React + Vite); lê /board e /events
 tests/
   domain/       testes unitários da máquina de estados
-  api/          testes HTTP (health, tickets)
-  integration/  webhook → task → ticket end-to-end
+  api/          testes HTTP (health, tickets, board, webchat, resposta)
+  integration/  webhook → task → ticket, nos dois canais
 ```
 
 ---
@@ -69,7 +91,7 @@ cd Omnihub
 # Copiar configuração padrão (já pronto para uso local)
 cp .env.example .env
 
-# Subir todos os serviços (api + worker + postgres + redis)
+# Subir todos os serviços (api + worker + frontend + postgres + redis)
 docker compose up --build
 ```
 
@@ -79,6 +101,9 @@ Aguarde até ver `Application startup complete` nos logs da `api`. Então:
 # Verificar que a API está saudável
 curl http://localhost:8000/health
 # → {"status":"ok"}
+
+# Mesa de atendimento (conversas, resposta do atendente, quadro ao vivo)
+open http://localhost:5173
 
 # Documentação interativa (Swagger)
 open http://localhost:8000/docs
@@ -164,7 +189,45 @@ curl -s -X POST http://localhost:8000/tickets/<TICKET_ID>/transition \
 curl -s -X POST http://localhost:8000/webhooks/whatsapp \
   -H "Content-Type: application/json" \
   -d '{ "object": "whatsapp_business_account", "entry": [{ "id": "123", "changes": [{ "field": "messages", "value": { "messaging_product": "whatsapp", "messages": [{ "id": "wamid.ABC001", "from": "+5511999990001", "timestamp": "1700000000", "type": "text", "text": { "body": "Preciso de ajuda" } }] } }] }] }'
-# → {"queued":true} — mas o ticket já existe, sem duplicata
+# → {"queued":true} — a mensagem já existe, sem segundo job
+```
+
+O webchat segue a mesma regra, usando `message_id` no lugar do wamid.
+
+### 7. Simular o chat do site
+
+```bash
+curl -s -X POST http://localhost:8000/webhooks/webchat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "sess-carla",
+    "message_id": "webchat.ABC001",
+    "text": "Oi pelo site"
+  }'
+# → {"queued":true}
+```
+
+O job na fila é `process_inbound_message`. O worker grava o canal `webchat` e usa `session_id` como identificador da conversa.
+
+### 8. Responder como atendente
+
+```bash
+curl -s -X POST http://localhost:8000/tickets/<TICKET_ID>/messages \
+  -H "Content-Type: application/json" \
+  -d '{"body": "Olá, já estou vendo o seu pedido"}'
+```
+
+A resposta fica na conversa com `direction: "outbound"` e `sender: "atendente"`. Se o ticket está `new`, `waiting_customer` ou `resolved`, essa chamada também o leva para `open`. Ticket `closed` responde `422`.
+
+### 9. Quadro e stream ao vivo
+
+```bash
+# Snapshot que a mesa carrega: cartões + transições permitidas
+curl -s http://localhost:8000/board | python3 -m json.tool
+
+# Server-Sent Events (job.queued, ticket.created, message.appended,
+# ticket.transitioned, message.sent, webhook.duplicate, message.duplicate)
+curl -N http://localhost:8000/events
 ```
 
 ---
@@ -177,33 +240,25 @@ Os testes usam SQLite in-memory — **não precisam de Docker rodando**.
 # Instalar uv se não tiver
 pip install uv
 
-# Rodar todos os 29 testes
+# Rodar todos os 40 testes
 uv run --extra dev pytest -v
 ```
-
----
-
-## Decisões de design
-
-| Decisão | Alternativa considerada | Por quê essa |
-|---|---|---|
-| **FastAPI** | Flask, Django | Async nativo; gera OpenAPI/Swagger automaticamente a partir de type hints |
-| **ARQ + Redis** como fila | Celery + RabbitMQ; fila em tabela Postgres | ARQ é async-nativo e leve; combina com o event loop do FastAPI; Redis é atomic para pop de fila |
-| **PostgreSQL + SQLAlchemy 2.0 async** | MongoDB; SQLite | SQL com relações claras (conversa → mensagens → ticket); SQLAlchemy 2.0 tem suporte nativo a async sem bloquear o event loop |
-| **`create_all` no startup** | Alembic migrations | MVP deliberado; Alembic é o upgrade path (Nível 2) — marcado no código com `ponytail:` comment |
-| **Resposta `202 Accepted` no webhook** | Processar de forma síncrona | A Meta reenvia o evento se não receber resposta rápida; processar de forma síncrona tornaria o endpoint sujeito a timeouts e duplicatas |
-| **Dedupe por `external_message_id` (wamid)** | Apenas confiar na fila não reenviar | Webhooks reais reenviam; a defesa precisa estar no endpoint (antes de enfileirar) E no worker (na escrita) |
-| **SQLite in-memory nos testes** | testcontainers + Postgres real | Sem infraestrutura necessária para `pytest`; `Uuid` genérico do SQLAlchemy 2.0 é compatível com ambos |
 
 ---
 
 ## Fluxo de estados do Ticket
 
 ```
-new ──► open ──► waiting_customer ──► resolved ──► closed
-         ▲             │                  │
-         └─────────────┘                  │
-         (cliente respondeu)              └──► open (reaberto)
+new ──► open ◄──► waiting_customer
+         │              │
+         ▼              ▼
+      resolved ──► closed
+         │
+         └──► open
 ```
+
+`closed` é terminal. `resolved` volta para `open` só pela ação do atendente.
+
+Uma mensagem nova do cliente entra no ticket que ainda está `new`, `open` ou `waiting_customer`, sem mudar o status. Se o ticket da conversa já está `resolved` ou `closed`, o worker abre outro ticket. Quem muda o status é o atendente, pela transição ou ao responder (`POST /tickets/{id}/messages` abre o ticket quando a transição para `open` é válida).
 
 Transições inválidas retornam `422 Unprocessable Entity` com mensagem descritiva.
