@@ -5,15 +5,16 @@ The HTTP tests mock the ARQ pool (no Redis needed).
 The worker task tests call process_whatsapp_message() directly (no ARQ queue
 needed), with AsyncSessionLocal patched to use the test SQLite engine.
 """
+import json
 import uuid
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.db.models import ConversationModel, MessageModel, TicketModel
-from app.workers.tasks import process_whatsapp_message
+from app.workers.tasks import process_inbound_message, process_whatsapp_message
 
 # Minimal valid WhatsApp Cloud API webhook payload
 _WA_PAYLOAD = {
@@ -169,3 +170,84 @@ async def test_worker_idempotency_on_duplicate_wamid(db, test_engine, patch_work
         select(MessageModel).where(MessageModel.external_message_id == "wamid.IDEM001")
     )).scalars().all()
     assert len(messages) == 1
+
+
+def _published(redis: AsyncMock) -> list[dict]:
+    return [json.loads(call.args[1]) for call in redis.publish.await_args_list]
+
+
+async def test_webhook_publishes_queued_event(client):
+    from app.events import CHANNEL
+
+    c, mock_pool = client
+    await c.post("/webhooks/whatsapp", json=_WA_PAYLOAD)
+    mock_pool.publish.assert_awaited()
+    channel, raw = mock_pool.publish.await_args.args
+    event = json.loads(raw)
+    assert channel == CHANNEL
+    assert event["type"] == "job.queued"
+    assert event["external_message_id"] == "wamid.UNIQUE001"
+    assert event["body"] == "Preciso de ajuda"
+
+
+async def test_worker_publishes_created_then_appended(db, test_engine, patch_worker_db):
+    redis = AsyncMock()
+    sender = "+5511555550001"
+    for index, wamid in enumerate(["wamid.LIVE001", "wamid.LIVE002"]):
+        await process_whatsapp_message(
+            ctx={"redis": redis},
+            data={
+                "external_message_id": wamid,
+                "sender": sender,
+                "body": f"Mensagem {index}",
+                "timestamp": str(1700004000 + index),
+                "channel": "whatsapp",
+            },
+        )
+
+    events = _published(redis)
+    assert [event["type"] for event in events] == ["ticket.created", "message.appended"]
+    assert events[0]["ticket"]["status"] == "new"
+    assert events[0]["ticket"]["message_count"] == 1
+    assert events[1]["ticket"]["id"] == events[0]["ticket"]["id"]
+    assert events[1]["ticket"]["message_count"] == 2
+    assert events[1]["ticket"]["last_message"] == "Mensagem 1"
+
+
+async def test_worker_publishes_duplicate_wamid(db, test_engine, patch_worker_db):
+    redis = AsyncMock()
+    job_data = {
+        "external_message_id": "wamid.LIVE003",
+        "sender": "+5511444440001",
+        "body": "Uma vez só",
+        "timestamp": "1700005000",
+        "channel": "whatsapp",
+    }
+    await process_whatsapp_message(ctx={"redis": redis}, data=job_data)
+    await process_whatsapp_message(ctx={"redis": redis}, data=job_data)
+
+    events = _published(redis)
+    kinds = [event["type"] for event in events]
+    assert kinds == ["ticket.created", "message.duplicate"]
+    assert events[1]["external_message_id"] == "wamid.LIVE003"
+
+
+async def test_worker_creates_webchat_ticket(db, test_engine, patch_worker_db):
+    await process_inbound_message(
+        ctx={},
+        data={
+            "external_message_id": "webchat.WORKER1",
+            "sender": "sess-carla",
+            "body": "Vim pelo site",
+            "timestamp": "",
+            "channel": "webchat",
+        },
+    )
+    conv = (
+        await db.execute(select(ConversationModel).where(ConversationModel.external_id == "sess-carla"))
+    ).scalar_one()
+    assert conv.channel == "webchat"
+    ticket = (
+        await db.execute(select(TicketModel).where(TicketModel.conversation_id == conv.id))
+    ).scalar_one()
+    assert ticket.status == "new"
