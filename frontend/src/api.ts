@@ -30,7 +30,7 @@ export async function fetchBoard(): Promise<Board> {
 }
 
 export async function fetchTicket(id: string): Promise<TicketDetail> {
-  const response = await fetch(apiUrl(`/tickets/${id}`))
+  const response = await fetch(apiUrl(`/tickets/${id}`), { cache: "no-store" })
   if (!response.ok) throw new ApiError(await readError(response))
   return response.json() as Promise<TicketDetail>
 }

@@ -83,7 +83,7 @@ async def receive_whatsapp(payload: WhatsAppWebhookPayload, db: DB, request: Req
 
                 arq_pool = request.app.state.arq_pool
                 await arq_pool.enqueue_job(
-                    "process_whatsapp_message",
+                    "process_inbound_message",
                     {
                         "external_message_id": msg.id,
                         "sender": msg.from_,

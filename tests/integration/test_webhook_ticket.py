@@ -2,7 +2,7 @@
 Integration tests for the webhook ingestion pipeline.
 
 The HTTP tests mock the ARQ pool (no Redis needed).
-The worker task tests call process_whatsapp_message() directly (no ARQ queue
+The worker task tests call process_inbound_message() directly (no ARQ queue
 needed), with AsyncSessionLocal patched to use the test SQLite engine.
 """
 import json
@@ -14,7 +14,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.db.models import ConversationModel, MessageModel, TicketModel
-from app.workers.tasks import process_inbound_message, process_whatsapp_message
+from app.services.bot_agent import BotDecision
+from app.workers.tasks import process_inbound_message, run_bot_turn
 
 # Minimal valid WhatsApp Cloud API webhook payload
 _WA_PAYLOAD = {
@@ -58,7 +59,7 @@ async def test_webhook_enqueues_job_with_correct_data(client):
     await c.post("/webhooks/whatsapp", json=_WA_PAYLOAD)
     mock_pool.enqueue_job.assert_called_once()
     job_name, job_data = mock_pool.enqueue_job.call_args.args
-    assert job_name == "process_whatsapp_message"
+    assert job_name == "process_inbound_message"
     assert job_data["external_message_id"] == "wamid.UNIQUE001"
     assert job_data["sender"] == "+5511999990001"
 
@@ -103,7 +104,7 @@ def patch_worker_db(test_engine):
 
 
 async def test_worker_creates_conversation_message_ticket(db, test_engine, patch_worker_db):
-    await process_whatsapp_message(
+    await process_inbound_message(
         ctx={},
         data={
             "external_message_id": "wamid.WORKER001",
@@ -128,13 +129,13 @@ async def test_worker_creates_conversation_message_ticket(db, test_engine, patch
     ticket = (await db.execute(
         select(TicketModel).where(TicketModel.conversation_id == conv.id)
     )).scalar_one()
-    assert ticket.status == "new"
+    assert ticket.status == "bot"
 
 
 async def test_worker_reuses_existing_open_ticket(db, test_engine, patch_worker_db):
     """A second message from the same sender must not open a second ticket."""
     for i, wamid in enumerate(["wamid.REUSE001", "wamid.REUSE002"]):
-        await process_whatsapp_message(
+        await process_inbound_message(
             ctx={},
             data={
                 "external_message_id": wamid,
@@ -163,8 +164,8 @@ async def test_worker_idempotency_on_duplicate_wamid(db, test_engine, patch_work
         "timestamp": "1700003000",
         "channel": "whatsapp",
     }
-    await process_whatsapp_message(ctx={}, data=job_data)
-    await process_whatsapp_message(ctx={}, data=job_data)  # simulate ARQ retry
+    await process_inbound_message(ctx={}, data=job_data)
+    await process_inbound_message(ctx={}, data=job_data)  # simulate ARQ retry
 
     messages = (await db.execute(
         select(MessageModel).where(MessageModel.external_message_id == "wamid.IDEM001")
@@ -194,7 +195,7 @@ async def test_worker_publishes_created_then_appended(db, test_engine, patch_wor
     redis = AsyncMock()
     sender = "+5511555550001"
     for index, wamid in enumerate(["wamid.LIVE001", "wamid.LIVE002"]):
-        await process_whatsapp_message(
+        await process_inbound_message(
             ctx={"redis": redis},
             data={
                 "external_message_id": wamid,
@@ -207,7 +208,7 @@ async def test_worker_publishes_created_then_appended(db, test_engine, patch_wor
 
     events = _published(redis)
     assert [event["type"] for event in events] == ["ticket.created", "message.appended"]
-    assert events[0]["ticket"]["status"] == "new"
+    assert events[0]["ticket"]["status"] == "bot"
     assert events[0]["ticket"]["message_count"] == 1
     assert events[1]["ticket"]["id"] == events[0]["ticket"]["id"]
     assert events[1]["ticket"]["message_count"] == 2
@@ -223,8 +224,8 @@ async def test_worker_publishes_duplicate_wamid(db, test_engine, patch_worker_db
         "timestamp": "1700005000",
         "channel": "whatsapp",
     }
-    await process_whatsapp_message(ctx={"redis": redis}, data=job_data)
-    await process_whatsapp_message(ctx={"redis": redis}, data=job_data)
+    await process_inbound_message(ctx={"redis": redis}, data=job_data)
+    await process_inbound_message(ctx={"redis": redis}, data=job_data)
 
     events = _published(redis)
     kinds = [event["type"] for event in events]
@@ -250,4 +251,74 @@ async def test_worker_creates_webchat_ticket(db, test_engine, patch_worker_db):
     ticket = (
         await db.execute(select(TicketModel).where(TicketModel.conversation_id == conv.id))
     ).scalar_one()
-    assert ticket.status == "new"
+    assert ticket.status == "bot"
+
+
+async def _open_bot_ticket(redis: AsyncMock, db) -> TicketModel:
+    await process_inbound_message(
+        ctx={"redis": redis},
+        data={
+            "external_message_id": "webchat.BOTSEED",
+            "sender": "sess-bot",
+            "body": "Oi, preciso de ajuda",
+            "timestamp": "",
+            "channel": "webchat",
+        },
+    )
+    return (await db.execute(select(TicketModel).limit(1))).scalar_one()
+
+
+async def test_bot_reply_publishes_card_with_the_new_message(db, test_engine, patch_worker_db):
+    redis = AsyncMock()
+    ticket = await _open_bot_ticket(redis, db)
+    decision = BotDecision(action="reply", reply_text="Vamos resolver isso")
+
+    with patch("app.workers.tasks._bot_agent.run_turn", new=AsyncMock(return_value=decision)):
+        await run_bot_turn(
+            ctx={"redis": redis},
+            data={
+                "ticket_id": str(ticket.id),
+                "conversation_id": str(ticket.conversation_id),
+                "channel": "webchat",
+                "sender": "sess-bot",
+            },
+        )
+
+    sent = [event for event in _published(redis) if event["type"] == "message.sent"]
+    assert len(sent) == 1
+    assert sent[0]["ticket"]["message_count"] == 2
+    assert sent[0]["ticket"]["last_message"] == "Vamos resolver isso"
+    assert sent[0]["ticket"]["status"] == "bot"
+    assert not any(event["type"] == "ticket.transitioned" for event in _published(redis))
+
+
+async def test_bot_escalation_publishes_message_and_transition(db, test_engine, patch_worker_db):
+    redis = AsyncMock()
+    ticket = await _open_bot_ticket(redis, db)
+    decision = BotDecision(
+        action="escalate",
+        reply_text="Vou te passar para um atendente",
+        escalation_reason="needs_human",
+    )
+
+    with patch("app.workers.tasks._bot_agent.run_turn", new=AsyncMock(return_value=decision)):
+        await run_bot_turn(
+            ctx={"redis": redis},
+            data={
+                "ticket_id": str(ticket.id),
+                "conversation_id": str(ticket.conversation_id),
+                "channel": "webchat",
+                "sender": "sess-bot",
+            },
+        )
+
+    events = _published(redis)
+    sent = [event for event in events if event["type"] == "message.sent"]
+    moved = [event for event in events if event["type"] == "ticket.transitioned"]
+    assert len(sent) == 1
+    assert sent[0]["ticket"]["message_count"] == 2
+    assert sent[0]["ticket"]["last_message"] == "Vou te passar para um atendente"
+    assert len(moved) == 1
+    assert moved[0]["from_status"] == "bot"
+    assert moved[0]["to_status"] == "new"
+    assert moved[0]["ticket"]["message_count"] == 2

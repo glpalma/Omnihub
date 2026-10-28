@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { COLUMNS } from "../labels"
 import type { Status, TicketCard, Transitions } from "../types"
+import { BotStrip } from "./BotStrip"
 import { Column } from "./Column"
 
 export function Board({
@@ -24,8 +25,12 @@ export function Board({
   const [over, setOver] = useState<Status | null>(null)
   const allowed = dragging ? new Set(transitions[dragging.status] ?? []) : null
 
+  const botCards = cards.filter((card) => card.status === "bot")
+
   return (
     <div className="board-wrap">
+      <BotStrip cards={botCards} onEscalate={(id) => onMove(id, "new")} />
+
       {banner ? (
         <p className="banner" role="alert">
           {banner}

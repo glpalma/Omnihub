@@ -7,9 +7,11 @@ from uuid import UUID
 class Channel(str, Enum):
     WHATSAPP = "whatsapp"
     WEBCHAT = "webchat"
+    UNKNOWN = "unknown"
 
 
 class TicketStatus(str, Enum):
+    BOT = "bot"
     NEW = "new"
     OPEN = "open"
     WAITING_CUSTOMER = "waiting_customer"

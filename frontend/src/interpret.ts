@@ -55,7 +55,7 @@ export function interpret(event: HubEvent): Interpretation | null {
     case "message.sent":
       return {
         tone: "state",
-        title: "Atendente respondeu",
+        title: event.ticket.sender === "bot" ? "Bot respondeu" : "Atendente respondeu",
         detail: event.ticket.last_message ?? "",
         at: atOf(event),
         card: event.ticket,

@@ -9,6 +9,7 @@ export const COLUMNS: { status: Status; label: string; hint: string }[] = [
 ]
 
 export const STATUS_LABEL: Record<Status, string> = {
+  bot: "Bot",
   new: "Novos",
   open: "Abertos",
   waiting_customer: "Aguardando",

@@ -2,6 +2,7 @@ from app.domain.models import TicketStatus
 
 # All valid state transitions. Anything not listed is forbidden.
 VALID_TRANSITIONS: dict[TicketStatus, set[TicketStatus]] = {
+    TicketStatus.BOT: {TicketStatus.NEW, TicketStatus.RESOLVED},
     TicketStatus.NEW: {TicketStatus.OPEN},
     TicketStatus.OPEN: {TicketStatus.WAITING_CUSTOMER, TicketStatus.RESOLVED},
     TicketStatus.WAITING_CUSTOMER: {TicketStatus.OPEN, TicketStatus.RESOLVED},

@@ -9,5 +9,15 @@ class Settings(BaseSettings):
     app_env: str = "development"
     debug: bool = False
 
+    featherless_api_key: str = ""
+    featherless_model: str = "deepseek-ai/DeepSeek-V4.1-Flash-1017"
+
+    # WhatsApp Cloud API — usado pelo WhatsAppSenderService (slice 03)
+    wa_phone_number_id: str = ""
+    wa_token: str = ""
+
+    # Comportamento do bot
+    bot_max_turns: int = 10  # força escalação após N turnos de ida-e-volta
+
 
 settings = Settings()

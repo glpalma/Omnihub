@@ -1,4 +1,4 @@
-export type Status = "new" | "open" | "waiting_customer" | "resolved" | "closed"
+export type Status = "bot" | "new" | "open" | "waiting_customer" | "resolved" | "closed"
 
 export type TicketCard = {
   id: string

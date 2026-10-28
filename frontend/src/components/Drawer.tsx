@@ -39,7 +39,7 @@ export function Drawer({
     return () => {
       cancelled = true
     }
-  }, [card.id, card.message_count, card.updated_at, card.status])
+  }, [card.id, card.message_count, card.updated_at, card.status, card.last_external_message_id])
 
   const messages = [...(detail?.messages ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at))
 
