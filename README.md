@@ -78,7 +78,7 @@ app/
   services/     BotAgentService (Featherless AI) + WhatsAppSenderService
   events.py     cartão do quadro e publicação no canal Redis
   core/         config (pydantic-settings)
-frontend/       mesa e quadro (React + Vite); lê /board e /events
+frontend/       mesa e quadro do atendente, e o chat do cliente em /chat (React + Vite)
 tests/
   domain/       testes unitários da máquina de estados
   api/          testes HTTP (health, tickets, board, webchat, resposta)
@@ -116,6 +116,9 @@ Aguarde até ver `Application startup complete` nos logs da `api`. Então:
 # Verificar que a API está saudável
 curl http://localhost:8000/health
 # → {"status":"ok"}
+
+# Chat do cliente (webchat simples, separado da mesa)
+open http://localhost:5173/chat
 
 # Mesa de atendimento (conversas, resposta do atendente, quadro ao vivo)
 open http://localhost:5173

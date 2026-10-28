@@ -11,8 +11,6 @@ export function BotStrip({
 }) {
   const [pending, setPending] = useState<TicketCard | null>(null)
 
-  if (cards.length === 0) return null
-
   return (
     <>
       <section className="bot-strip" aria-label="Atendimentos em andamento pelo bot">
@@ -26,6 +24,9 @@ export function BotStrip({
           </span>
         </header>
 
+        {cards.length === 0 ? (
+          <p className="bot-strip-empty">Nenhum cliente com o bot agora.</p>
+        ) : (
         <div className="bot-strip-cards">
           {cards.map((card) => (
             <article key={card.id} className="bot-card">
@@ -51,6 +52,7 @@ export function BotStrip({
             </article>
           ))}
         </div>
+        )}
       </section>
 
       {pending !== null && (

@@ -137,13 +137,18 @@ export function App() {
             <h1>Omnihub</h1>
           </div>
         </div>
-        <div className="view-switch" role="tablist">
-          <button type="button" className={view === "mesa" ? "chip is-on" : "chip"} onClick={() => setView("mesa")}>
-            Mesa
-          </button>
-          <button type="button" className={view === "quadro" ? "chip is-on" : "chip"} onClick={() => setView("quadro")}>
-            Quadro
-          </button>
+        <div className="view-switch">
+          <div role="tablist">
+            <button type="button" className={view === "mesa" ? "chip is-on" : "chip"} onClick={() => setView("mesa")}>
+              Mesa
+            </button>
+            <button type="button" className={view === "quadro" ? "chip is-on" : "chip"} onClick={() => setView("quadro")}>
+              Quadro
+            </button>
+          </div>
+          <a className="chip" href="/chat">
+            Chat do cliente
+          </a>
         </div>
         <p className={`link link-${link}`}>
           <i />

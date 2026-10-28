@@ -418,7 +418,8 @@ code {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
-.view-switch { display: flex; gap: 6px; }
+.view-switch { display: flex; gap: 6px; align-items: center; }
+.view-switch [role="tablist"] { display: flex; gap: 6px; }
 
 .chip {
   background: transparent;
@@ -426,6 +427,7 @@ code {
   border: 1px solid var(--line);
   padding: 0.35rem 0.7rem;
   font-size: 0.82rem;
+  text-decoration: none;
 }
 
 .chip.is-on { background: #e7efe9; color: #142019; border-color: transparent; }
@@ -623,6 +625,12 @@ code {
   color: var(--muted);
 }
 
+.bot-strip-empty {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--faint);
+}
+
 .bot-strip-cards {
   display: flex;
   gap: 10px;
@@ -689,6 +697,68 @@ code {
   font-size: 0.78rem;
   border-radius: 999px;
 }
+
+.webchat {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  width: min(480px, 100%);
+  margin: 0 auto;
+  padding: 18px 16px 16px;
+}
+
+.webchat-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.webchat-top h1 { margin: 0; font-size: 1.6rem; font-weight: 600; }
+.webchat-top .eyebrow { margin: 0; }
+
+.webchat-thread {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg-raise);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px;
+  overflow: auto;
+}
+
+.webchat-status, .webchat-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.webchat-thread .bubbles { min-height: 0; }
+.webchat-thread .bubbles article[data-direction="inbound"] { margin-left: auto; background: var(--bg-card); }
+.webchat-thread .bubbles article[data-direction="outbound"] { margin-right: auto; margin-left: 0; }
+
+.webchat-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.webchat-form textarea {
+  width: 100%;
+  resize: none;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-raise);
+  padding: 0.7rem 0.8rem;
+}
+
+.webchat-form .thread-note { grid-column: 1 / -1; margin: 0; }
 
 /* ── Dialog de confirmação ──────────────────────────────────────── */
 
