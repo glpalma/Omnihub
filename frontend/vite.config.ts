@@ -16,4 +16,7 @@ export default defineConfig({
       "/health": target,
     },
   },
+  preview: {
+    allowedHosts: ["localhost", "127.0.0.1", "frontend-production-3463.up.railway.app"],
+  },
 })
