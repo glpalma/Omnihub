@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { ApiError, apiUrl, fetchBoard, transitionTicket } from "./api"
 import { Board } from "./components/Board"
+import { VisionSwitch } from "./components/VisionSwitch"
 import { Composer } from "./components/Composer"
 import { Desk } from "./components/Desk"
 import { Drawer } from "./components/Drawer"
@@ -141,6 +142,7 @@ export function App() {
             <h1>Omnihub</h1>
           </div>
         </div>
+        <VisionSwitch current="atendente" />
         <div className="view-switch">
           <div role="tablist">
             <button type="button" className={view === "mesa" ? "chip is-on" : "chip"} onClick={() => setView("mesa")}>
@@ -150,9 +152,6 @@ export function App() {
               Quadro
             </button>
           </div>
-          <a className="chip" href="/">
-            Chat do cliente
-          </a>
         </div>
         <p className={`link link-${link}`}>
           <i />

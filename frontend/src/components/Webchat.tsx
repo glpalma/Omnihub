@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { apiUrl, fetchBoard, fetchTicket, sendWebchat } from "../api"
+import { VisionSwitch } from "./VisionSwitch"
 import { formatClock } from "../labels"
 import type { HubEvent, Status, TicketMessage } from "../types"
 
@@ -158,9 +159,7 @@ export function Webchat() {
               </p>
             </div>
           </div>
-          <a className="chip" href="/mesa">
-            Atendente
-          </a>
+          <VisionSwitch current="cliente" />
         </header>
 
         <section className="webchat-thread" aria-label="Conversa">

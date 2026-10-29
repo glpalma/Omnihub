@@ -79,14 +79,19 @@ code {
 }
 
 .top {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "brand vision"
+    "switch status";
   align-items: center;
-  flex-wrap: wrap;
-  gap: 12px 16px;
+  gap: 10px 16px;
 }
 
-.brand { display: flex; gap: 12px; align-items: center; }
+.brand { grid-area: brand; display: flex; gap: 12px; align-items: center; }
+.top > .vision-switch { grid-area: vision; justify-self: end; justify-content: flex-end; }
+.view-switch { grid-area: switch; }
+.top > .link { grid-area: status; justify-self: end; }
 
 .brand h1 { margin: 0; font-size: 1.7rem; letter-spacing: -0.04em; font-weight: 600; }
 
@@ -427,7 +432,7 @@ code {
 }
 
 .view-switch { display: flex; gap: 6px; align-items: center; }
-.view-switch [role="tablist"] { display: flex; gap: 6px; }
+.view-switch [role="tablist"], .vision-switch { display: flex; gap: 6px; align-items: center; }
 
 .chip {
   background: transparent;
@@ -436,6 +441,16 @@ code {
   padding: 0.35rem 0.7rem;
   font-size: 0.82rem;
   text-decoration: none;
+}
+
+.vision-switch .chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: auto;
+  border-radius: 999px;
+  text-align: center;
 }
 
 .chip.is-on { background: #e7efe9; color: #142019; border-color: transparent; }
@@ -612,30 +627,24 @@ code {
   .app:not(.is-desk) > .pipeline { order: 3; }
 
   .top {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
+      "vision vision"
       "brand status"
       "switch switch";
-    align-items: center;
-    gap: 10px;
   }
 
-  .brand { grid-area: brand; min-width: 0; }
+  .brand { min-width: 0; }
   .brand > div { min-width: 0; }
   .brand .eyebrow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .brand h1 { font-size: 1.3rem; }
-  .link { grid-area: status; justify-self: end; }
+  .top > .vision-switch { justify-self: end; }
 
   .view-switch {
-    grid-area: switch;
     max-width: 100%;
-    overflow-x: auto;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     padding-bottom: 2px;
   }
 
-  .view-switch [role="tablist"] { flex: 0 0 auto; }
   .chip { white-space: nowrap; }
 
   .pipeline {
@@ -870,13 +879,15 @@ code {
 
 .webchat-top {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 12px;
   padding: 16px 16px 14px;
   border-bottom: 1px solid rgba(49, 64, 56, 0.85);
   background: linear-gradient(180deg, rgba(60, 186, 154, 0.16), transparent);
 }
+
+.webchat-top .vision-switch { order: -1; justify-content: flex-end; width: 100%; }
 
 .webchat-identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
 
