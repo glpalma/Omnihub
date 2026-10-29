@@ -62,14 +62,43 @@ export function Desk({
   onSimulated: (channel: string, externalId: string) => void
 }) {
   const [filter, setFilter] = useState<"all" | ChannelName>("all")
+  const [mobilePane, setMobilePane] = useState<"inbox" | "thread" | "lab">("inbox")
   const visible = cards
     .filter((card) => filter === "all" || card.channel === filter)
     .slice()
     .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))
   const selected = cards.find((card) => card.id === selectedId) ?? null
 
+  useEffect(() => {
+    if (selectedId) setMobilePane("thread")
+  }, [selectedId])
+
   return (
-    <div className="desk">
+    <div className={`desk pane-${mobilePane}`}>
+      <nav className="desk-mobile-nav" aria-label="Seções da mesa">
+        <button
+          type="button"
+          className={mobilePane === "inbox" ? "chip is-on" : "chip"}
+          onClick={() => setMobilePane("inbox")}
+        >
+          Conversas
+        </button>
+        <button
+          type="button"
+          className={mobilePane === "thread" ? "chip is-on" : "chip"}
+          onClick={() => setMobilePane("thread")}
+          disabled={!selected}
+        >
+          Atender
+        </button>
+        <button
+          type="button"
+          className={mobilePane === "lab" ? "chip is-on" : "chip"}
+          onClick={() => setMobilePane("lab")}
+        >
+          Testes
+        </button>
+      </nav>
       <section className="panel inbox">
         <header>
           <h2>Conversas</h2>
@@ -94,14 +123,17 @@ export function Desk({
         </header>
         <ul>
           {visible.length === 0 ? (
-            <li className="inbox-empty">Nenhuma conversa neste filtro. Dispare um webhook ao lado.</li>
+            <li className="inbox-empty">Nenhuma conversa neste filtro. Dispare um webhook de teste para ela aparecer aqui.</li>
           ) : (
             visible.map((card) => (
               <li key={card.id}>
                 <button
                   type="button"
                   className={card.id === selectedId ? "row is-on" : "row"}
-                  onClick={() => onSelect(card.id)}
+                  onClick={() => {
+                    onSelect(card.id)
+                    setMobilePane("thread")
+                  }}
                 >
                   <span className="channel">{card.channel ?? "canal"}</span>
                   <strong>{card.external_id ?? "contato"}</strong>
@@ -119,7 +151,7 @@ export function Desk({
       <section className="panel simulators">
         <header>
           <h2>Webhooks de teste</h2>
-          <p>Cada cliente fala por um contrato diferente. A resposta entra na conversa ao lado.</p>
+          <p>Cada cliente fala por um contrato diferente. A resposta entra na conversa.</p>
         </header>
         {latest ? (
           <p className="desk-latest">

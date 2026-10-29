@@ -133,74 +133,107 @@ export function Webchat() {
   }
 
   const waiting = pending.filter((item) => !messages.some((message) => message.external_message_id === item.id))
+  const empty = messages.length === 0 && waiting.length === 0
+  const presence =
+    status === "resolved" || status === "closed"
+      ? "encerrado"
+      : status === "new" || status === "open" || status === "waiting_customer"
+        ? "atendente"
+        : "online"
 
   return (
     <div className="webchat">
-      <header className="webchat-top">
-        <div>
-          <p className="eyebrow">Suporte</p>
-          <h1>Chat</h1>
-        </div>
-        <a className="chip" href="/">
-          Área do atendente
-        </a>
-      </header>
-
-      <section className="webchat-thread" aria-label="Conversa">
-        <p className="webchat-status">{statusLine(status)}</p>
-        {messages.length === 0 && waiting.length === 0 ? (
-          <p className="webchat-empty">Nenhuma mensagem ainda.</p>
-        ) : (
-          <div className="bubbles">
-            {messages.map((message) => (
-              <article key={message.id} data-direction={message.direction}>
-                <p>{message.body}</p>
-                <footer>
-                  <span>{speaker(message)}</span>
-                  <time dateTime={message.created_at}>{formatClock(message.created_at)}</time>
-                </footer>
-              </article>
-            ))}
-            {waiting.map((message) => (
-              <article key={message.id} data-direction="inbound">
-                <p>{message.body}</p>
-                <footer>
-                  <span>Você</span>
-                  <time dateTime={message.created_at}>enviando</time>
-                </footer>
-              </article>
-            ))}
-            <div ref={endRef} />
+      <div className="webchat-shell">
+        <header className="webchat-top">
+          <div className="webchat-identity">
+            <span className="webchat-avatar" aria-hidden="true">
+              B
+            </span>
+            <div>
+              <p className="eyebrow">Suporte</p>
+              <h1>Bia</h1>
+              <p className={`webchat-presence is-${presence}`}>
+                <i />
+                {presence === "encerrado" ? "Atendimento encerrado" : presence === "atendente" ? "Atendente na conversa" : "Online agora"}
+              </p>
+            </div>
           </div>
-        )}
-      </section>
+          <a className="chip" href="/mesa">
+            Atendente
+          </a>
+        </header>
 
-      <form
-        className="webchat-form"
-        onSubmit={(event) => {
-          event.preventDefault()
-          void send()
-        }}
-      >
-        <textarea
-          rows={2}
-          value={draft}
-          placeholder="Escreva sua mensagem"
-          aria-label="Mensagem"
-          disabled={busy}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault()
-              void send()
-            }
+        <section className="webchat-thread" aria-label="Conversa">
+          <p className={`webchat-status${status ? ` is-${status}` : ""}`}>{statusLine(status)}</p>
+          {empty ? (
+            <div className="webchat-empty">
+              <span className="webchat-empty-mark" aria-hidden="true">
+                B
+              </span>
+              <strong>Olá, eu sou a Bia.</strong>
+              <p>Conte o que você precisa. Se preferir, um atendente assume daqui.</p>
+              <div className="webchat-prompts">
+                {["Preciso de ajuda", "Quero falar com alguém", "Como funciona o atendimento?"].map((prompt) => (
+                  <button key={prompt} type="button" className="ghost" onClick={() => setDraft(prompt)}>
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="bubbles">
+              {messages.map((message) => (
+                <article key={message.id} data-direction={message.direction} data-speaker={message.sender || "cliente"}>
+                  <p>{message.body}</p>
+                  <footer>
+                    <span>{speaker(message)}</span>
+                    <time dateTime={message.created_at}>{formatClock(message.created_at)}</time>
+                  </footer>
+                </article>
+              ))}
+              {waiting.map((message) => (
+                <article key={message.id} data-direction="inbound" data-pending="true">
+                  <p>{message.body}</p>
+                  <footer>
+                    <span>Você</span>
+                    <time dateTime={message.created_at}>enviando</time>
+                  </footer>
+                </article>
+              ))}
+              <div ref={endRef} />
+            </div>
+          )}
+        </section>
+
+        <form
+          className="webchat-form"
+          onSubmit={(event) => {
+            event.preventDefault()
+            void send()
           }}
-        />
-        <button type="submit" disabled={busy || !draft.trim()}>
-          Enviar
-        </button>
-        {error ? <p className="thread-note">{error}</p> : null}
-      </form>
+        >
+          <textarea
+            rows={1}
+            value={draft}
+            placeholder="Escreva sua mensagem"
+            aria-label="Mensagem"
+            disabled={busy}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault()
+                void send()
+              }
+            }}
+          />
+          <button type="submit" disabled={busy || !draft.trim()} aria-label="Enviar">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+              <path fill="currentColor" d="M4 11h11.2l-4.1-4.1 1.4-1.4L19.6 12l-7.1 6.5-1.4-1.4 4.1-4.1H4v-2Z" />
+            </svg>
+          </button>
+          {error ? <p className="thread-note">{error}</p> : null}
+        </form>
+      </div>
     </div>
   )
 }

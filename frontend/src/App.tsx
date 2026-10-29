@@ -25,6 +25,10 @@ export function App() {
   const [focusKey, setFocusKey] = useState<string | null>(null)
   const applyRef = useRef<(event: HubEvent) => void>(() => {})
 
+  useEffect(() => {
+    document.title = "Omnihub — mesa"
+  }, [])
+
   const pushFeed = useCallback((item: Omit<FeedItem, "id">) => {
     setFeed((prev) => [{ ...item, id: crypto.randomUUID() }, ...prev].slice(0, 48))
   }, [])
@@ -146,7 +150,7 @@ export function App() {
               Quadro
             </button>
           </div>
-          <a className="chip" href="/chat">
+          <a className="chip" href="/">
             Chat do cliente
           </a>
         </div>

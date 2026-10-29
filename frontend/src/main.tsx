@@ -8,9 +8,10 @@ const root = document.getElementById("root")
 if (!root) throw new Error("Elemento #root não encontrado")
 
 const path = window.location.pathname.replace(/\/+$/, "") || "/"
+const agentDesk = path === "/mesa" || path === "/quadro" || path === "/atendente"
 
 createRoot(root).render(
   <StrictMode>
-    {path === "/chat" ? <Webchat /> : <App />}
+    {agentDesk ? <App /> : <Webchat />}
   </StrictMode>,
 )

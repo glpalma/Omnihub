@@ -59,8 +59,8 @@ Plataformas de atendimento como as da VulcaNet recebem eventos de WhatsApp, voz,
                          │  ⑬  envia msg ao cliente (WhatsApp Cloud API)│
                          │  ⑭  publica evento SSE                       │
                          │                  │                           │
-  Mesa :5173             │  GET /board          PostgreSQL              │
-  Quadro / curl /docs ──►│  GET /events  (SSE)                          │
+  Cliente :5173          │  GET /board          PostgreSQL              │
+  Mesa /mesa · /docs ───►│  GET /events  (SSE)                          │
                          │  GET /tickets  ·  GET /tickets/{id}          │
                          │  POST /tickets/{id}/transition               │
                          │  POST /tickets/{id}/messages                 │
@@ -78,7 +78,7 @@ app/
   services/     BotAgentService (Featherless AI) + WhatsAppSenderService
   events.py     cartão do quadro e publicação no canal Redis
   core/         config (pydantic-settings)
-frontend/       mesa e quadro do atendente, e o chat do cliente em /chat (React + Vite)
+frontend/       chat do cliente na raiz (`/`), mesa e quadro do atendente em `/mesa` (React + Vite)
 tests/
   domain/       testes unitários da máquina de estados
   api/          testes HTTP (health, tickets, board, webchat, resposta)
@@ -117,11 +117,11 @@ Aguarde até ver `Application startup complete` nos logs da `api`. Então:
 curl http://localhost:8000/health
 # → {"status":"ok"}
 
-# Chat do cliente (webchat simples, separado da mesa)
-open http://localhost:5173/chat
+# Chat do cliente (tela inicial; /chat abre a mesma tela)
+open http://localhost:5173
 
 # Mesa de atendimento (conversas, resposta do atendente, quadro ao vivo)
-open http://localhost:5173
+open http://localhost:5173/mesa
 
 # Documentação interativa (Swagger)
 open http://localhost:8000/docs
